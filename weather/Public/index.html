@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Weather Trend Visualizer — Colorful Mode</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+/* ------------------ THEME VARIABLES ------------------ */
+:root{
+  --bg-light-1: linear-gradient(135deg,#e3f2fd,#fce4ec);
+  --bg-light-2: linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0.06));
+  --text: #0f1720;
+  --muted: rgba(15,23,32,0.55);
+  --glass: rgba(255,255,255,0.12);
+  --accent1: #ff4081;
+  --accent2: #7c4dff;
+  --accent3: #00bcd4;
+  --card-glow: 0 12px 40px rgba(124,77,255,0.12);
+  --icon-glow: 0 0 22px rgba(255,64,129,0.14);
+  --history-border: rgba(15,23,32,0.06);
+}
+
+/* Dark / Colorful neon theme variables */
+body.colorful-dark {
+  --bg-light-1: radial-gradient(circle at 10% 10%, #140032 0%, #08020a 60%, #000000 100%);
+  --bg-light-2: linear-gradient(180deg, rgba(8,2,10,0.32), rgba(0,0,0,0.08));
+  --text: #e7f3ff;
+  --muted: rgba(231,243,255,0.55);
+  --glass: rgba(10,6,20,0.36);
+  --accent1: #ff5ac6;
+  --accent2: #635bff;
+  --accent3: #00f0ff;
+  --card-glow: 0 16px 60px rgba(99,91,255,0.18);
+  --icon-glow: 0 0 32px rgba(0,240,255,0.12);
+  --history-border: rgba(255,255,255,0.06);
+}
+
+/* ------------------ GLOBAL ------------------ */
+*{margin:0;padding:0;box-sizing:border-box;font-family:"Poppins",system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial}
+html,body{height:100%}
+body{
+  background:var(--bg-light-1);
+  color:var(--text);
+  min-height:100vh; overflow:hidden; padding:22px;
+  transition:background .7s ease,color .4s;
+}
+@keyframes sunPulse{
+  0%{ transform:scale(1); box-shadow:0 0 40px 10px #ffeb3b; opacity:0.9; }
+  25%{ transform:scale(1.1); box-shadow:0 0 80px 28px #ffd54f; opacity:1; }
+  50%{ transform:scale(1.15); box-shadow:0 0 120px 36px #ffd54f; opacity:0.95; }
+  75%{ transform:scale(1.12); box-shadow:0 0 100px 32px #ffca28; opacity:1; }
+  100%{ transform:scale(1); box-shadow:0 0 40px 10px #ffeb3b; opacity:0.9; }
+}
+
+
+/* APP CONTAINER */
+.container{
+  max-width:980px; margin:32px auto; padding:28px; border-radius:20px;
+  backdrop-filter: blur(12px) saturate(130%);
+  background:var(--bg-light-2);
+  box-shadow:0 12px 40px rgba(2,6,23,0.12);
+  position:relative; z-index:10; overflow:visible;
+  transition:all .45s ease;
+}
+
+/* HEADER */
+.header-row{display:flex;gap:12px;align-items:center;justify-content:space-between}
+.title{font-size:20px;font-weight:800;letter-spacing:0.2px}
+.subtitle{font-size:13px;color:var(--muted);margin-top:6px}
+
+/* CONTROLS */
+.controls{display:flex;gap:10px;align-items:center}
+#city{
+  width:420px;max-width:55%;padding:12px 16px;border-radius:999px;border:none;font-size:16px;
+  background:linear-gradient(180deg,rgba(255,255,255,0.92),rgba(255,255,255,0.8));
+  box-shadow: inset 0 2px 10px rgba(0,0,0,0.06);
+  transition:box-shadow .2s, transform .12s;
+}
+#city:focus{outline:none;box-shadow:0 6px 30px rgba(0,0,0,0.08);transform:translateY(-1px);}
+
+/* Buttons - colorful gradients */
+.btn{
+  padding:10px 16px;border-radius:999px;border:none;cursor:pointer;font-weight:700;color:white;
+  box-shadow: 0 10px 30px rgba(2,6,23,0.08); transition:transform .18s,filter .18s;
+}
+.btn:active{transform:translateY(1px)}
+#showBtn{background:linear-gradient(135deg,var(--accent1),#ff80ab);filter:drop-shadow(0 8px 28px rgba(255,64,129,0.18))}
+#historyBtn{background:linear-gradient(135deg,var(--accent2),#651fff);filter:drop-shadow(0 8px 28px rgba(124,77,255,0.18))}
+#darkToggle{background:linear-gradient(135deg,var(--accent3),#00bcd4);color:#012; font-weight:800; box-shadow:0 12px 40px rgba(0,188,212,0.12)}
+
+/* tiny loader */
+.loader{width:46px;height:46px;border:6px solid rgba(255,255,255,0.22);border-top:6px solid var(--accent1);border-radius:50%;display:none;margin-left:8px;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* metric & chart layout */
+.metrics{display:flex;gap:18px;margin-top:16px;align-items:flex-start;flex-wrap:wrap}
+.chart-box{margin-top:8px;padding:12px;border-radius:14px;background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);height:320px;}
+
+/* effects canvas */
+#effects{position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:-3;pointer-events:none}
+
+/* parallax background */
+.parallax{position:fixed;top:0;left:0;width:150%;height:150%;background:url("https://wallpapers.com/images/hd/fine-weather-landscape-iq9k6ubn8w9yhhkc.jpg") center/cover no-repeat;opacity:.06;z-index:-4;filter:blur(1px);animation:drift 40s linear infinite}
+@keyframes drift{0%{transform:translate(-10%,-10%)}100%{transform:translate(-20%,-20%)}}
+
+/* CLOUDS */
+.cloud{position:fixed;width:280px;opacity:.85;animation:cloudFloat 55s linear infinite;z-index:-2}
+@keyframes cloudFloat{0%{transform:translateX(-350px) translateY(0) scale(1)}50%{transform:translateX(40vw) translateY(-12px) scale(1.06)}100%{transform:translateX(110vw) translateY(0) scale(1)}}
+
+/* SUN */
+.sun{position:fixed;top:6%;right:6%;width:150px;height:150px;border-radius:50%;
+  background:radial-gradient(circle,#ffd54f,#ffca28);box-shadow:0 0 120px rgba(255,213,79,0.14);animation:sunPulse 3.2s infinite alternate;z-index:-2}
+@keyframes sunPulse{0%{transform:scale(1);box-shadow:0 0 40px 10px #ffeb3b}50%{transform:scale(1.15);box-shadow:0 0 120px 36px #ffd54f}100%{transform:scale(1);box-shadow:0 0 40px 10px #ffeb3b}}
+
+/* LIGHTNING FLASH */
+.flash{position:fixed;top:0;left:0;width:100vw;height:100vh;background:#fff;opacity:0;pointer-events:none;z-index:9999}
+
+/* ICON */
+#weatherIcon3D{width:150px;height:150px;margin:12px auto 0;display:block;border-radius:16px;opacity:0;transform-origin:center;transition:opacity .7s,transform .5s;filter:var(--icon-glow)}
+#weatherIcon3D:hover{transform:rotateY(14deg) rotateX(6deg) scale(1.06)}
+
+/* HISTORY OVERLAY (Floating Glass Cards) */
+.history-overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;backdrop-filter: blur(8px) brightness(.92);z-index:60;padding:28px}
+.history-panel{
+  width:min(980px,96%);max-height:86vh;overflow:auto;border-radius:18px;padding:20px;
+  background:linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+  border:1px solid var(--history-border); box-shadow:var(--card-glow); transform:translateY(12px) scale(.98);opacity:0;transition:all .45s cubic-bezier(.2,.9,.2,1);
+}
+.history-panel.show{transform:translateY(0) scale(1);opacity:1}
+
+/* grid of cards */
+.history-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-top:12px}
+.hist-card{
+  padding:14px;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  border:1px solid rgba(255,255,255,0.03);backdrop-filter:blur(6px);position:relative;overflow:hidden;
+  transition:all .38s ease; transform:translateY(12px) scale(.97); opacity:0;
+}
+.hist-card.show{transform:translateY(0) scale(1);opacity:1}
+.hist-card:hover{box-shadow:0 18px 60px rgba(0,0,0,0.12);transform:translateY(-6px) scale(1.02)}
+
+/* card header */
+.hist-city{font-weight:800;font-size:15px; color:var(--text); margin-bottom:6px}
+.hist-meta{font-size:13px;color:var(--muted);margin-bottom:10px}
+.hist-temp{font-weight:800;font-size:22px}
+
+/* small actions */
+.card-actions{display:flex;gap:8px;position:absolute;top:10px;right:10px}
+.small-btn{padding:6px 8px;border-radius:8px;border:none;font-size:12px;cursor:pointer;background:rgba(0,0,0,0.08);color:var(--text)}
+.small-btn:hover{transform:translateY(-3px)}
+
+/* footer */
+.history-footer{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-top:12px;color:var(--muted)}
+
+/* responsive */
+@media (max-width:720px){
+  #city{width:56%}
+  .header-row{flex-direction:column;align-items:flex-start;gap:12px}
+  .controls{width:100%}
+}
+</style>
+</head>
+<body>
+
+<!-- decorative background -->
+<div class="parallax"></div>
+<canvas id="effects"></canvas>
+
+<div class="container">
+  <div class="header-row">
+    <div>
+      <div class="title">Weather Trend Visualizer</div>
+      <div class="subtitle"></div>
+    </div>
+
+    <div class="controls">
+      <input id="city" placeholder="Enter city (e.g., New York)">
+      <button id="showBtn" class="btn">Show Trend</button>
+      <button id="historyBtn" class="btn">History</button>
+      <button id="darkToggle" class="btn">Mode: Colorful</button>
+      <div id="loader" class="loader" aria-hidden="true"></div>
+    </div>
+  </div>
+
+  <div class="metrics">
+    <img id="weatherIcon3D" src="" alt="weather icon" style="display:none">
+    <div class="chart-box" style="flex:1 1 100%">
+      <canvas id="chart"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- HISTORY OVERLAY -->
+<div id="historyOverlay" class="history-overlay" role="dialog" aria-modal="true">
+  <div id="historyPanel" class="history-panel">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div style="display:flex;flex-direction:column">
+        <strong style="font-size:16px">Search History</strong>
+        <small style="color:var(--muted)">Floating glass card</small>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <button id="clearHistory" class="btn" style="background:linear-gradient(135deg,#ff6b6b,#ff4081)">Clear</button>
+        <button id="closeHistory" class="btn" style="background:linear-gradient(135deg,#7c4dff,#651fff)">Close</button>
+      </div>
+    </div>
+
+    <div id="historyGrid" class="history-grid" aria-live="polite" style="margin-top:14px"></div>
+
+    <div class="history-footer">
+      <div>Stored in your browser</div>
+      <div style="display:flex;gap:8px">
+        <button id="exportHistory" class="btn" style="background:linear-gradient(135deg,#00bcd4,#0097a7);color:#012">Export</button>
+      </div>
+    </div>
+  </div>
+</div>
+<audio id="rainSound" src="https://www.soundjay.com/nature/rain-01.mp3" loop></audio>
+<audio id="thunderSound" src="https://www.soundjay.com/nature/thunder-01.mp3"></audio>
+
+
+<script>
+/* ============================
+   State & canvas setup
+   ============================ */
+const fx = document.getElementById("effects");
+const fxCtx = fx.getContext("2d");
+const loader = document.getElementById("loader");
+const chartCanvas = document.getElementById("chart");
+let chart = null;
+let particles = [];
+let thunderInterval = null;
+let cloudEls = [];
+let sunEl = null;
+
+function resizeCanvas(){ fx.width = innerWidth; fx.height = innerHeight; }
+resizeCanvas(); window.addEventListener('resize', resizeCanvas);
+
+/* HISTORY key */
+const HISTORY_KEY = 'wtv_history_colorful_v1';
+
+/* fallback demo data */
+function demoData(city){
+  const times=[]; const temps=[];
+  const now=new Date();
+  for(let i=0;i<12;i++){
+    const d=new Date(now.getTime()+i*3*3600*1000);
+    times.push(d.toLocaleString(undefined,{hour:'numeric',hour12:true,month:'short',day:'numeric'}));
+    temps.push(Math.round(16 + 6*Math.sin(i/2) + (Math.random()*2-1)*2));
+  }
+  return {city,times,temps, rawWeather:{list:[{weather:[{main:"Clouds"}], main:{temp:temps[0]}}]}};
+}
+
+/* ============================
+   Fetch weather (server or demo)
+   ============================ */
+async function fetchWeatherData(city) {
+
+  // Step 1: Get city coordinates
+  const geoResponse = await fetch(
+    "https://geocoding-api.open-meteo.com/v1/search?name=" + city
+  );
+
+  const geoData = await geoResponse.json();
+
+  if (!geoData.results) {
+    alert("City not found");
+    return null;
+  }
+
+  const lat = geoData.results[0].latitude;
+  const lon = geoData.results[0].longitude;
+  const cityName = geoData.results[0].name;
+
+  // Step 2: Get weather temperature
+  const weatherResponse = await fetch(
+    `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m`
+  );
+
+  const weatherData = await weatherResponse.json();
+
+  const times = weatherData.hourly.time.slice(0, 24);
+  const temps = weatherData.hourly.temperature_2m.slice(0, 24);
+  
+
+  return {
+    city: cityName,
+    times: times,
+    temps: temps,
+    rawWeather: {
+      list: [
+        {
+          weather: [{ main: "Clear" }]
+        }
+      ]
+    }
+  };
+}
+
+/* ============================
+   Chart draw
+   ============================ */
+function drawChart(city,times,temps){
+  if(chart) chart.destroy();
+  const ctx = chartCanvas.getContext('2d');
+  chart = new Chart(ctx,{
+    type:'line',
+    data:{
+      labels:times,
+      datasets:[{
+        label:`Temperature in ${city}`,
+        data:temps,
+        borderWidth:3,
+        borderColor: getComputedStyle(document.body).getPropertyValue('--accent1').trim() || '#ff4081',
+        backgroundColor:'rgba(255,64,129,0.14)',
+        tension:0.36,
+        fill:true,
+        pointRadius:3
+      }]
+    },
+    options:{
+      maintainAspectRatio:false,
+      elements:{point:{radius:3}},
+      plugins:{legend:{display:false}}
+    }
+  });
+}
+
+/* ============================
+   History functions
+   ============================ */
+function loadHistoryData(){ try{ const r = localStorage.getItem(HISTORY_KEY); return r ? JSON.parse(r) : []; }catch(e){ return []; } }
+function saveHistoryData(arr){ localStorage.setItem(HISTORY_KEY, JSON.stringify(arr)); }
+
+function addToHistory(entry){
+  const hist = loadHistoryData();
+  hist.unshift(entry);
+  const unique=[]; const seen=new Set();
+  for(const h of hist){
+    const key = `${h.city}|${h.snapshot}`;
+    if(!seen.has(key)){ unique.push(h); seen.add(key); }
+    if(unique.length>=60) break;
+  }
+  saveHistoryData(unique);
+}
+
+/* UI - history overlay */
+const historyOverlay = document.getElementById('historyOverlay');
+const historyPanel = document.getElementById('historyPanel');
+const historyGrid = document.getElementById('historyGrid');
+
+function openHistory(){
+  const items = loadHistoryData();
+  historyGrid.innerHTML = '';
+  if(items.length===0){
+    historyGrid.innerHTML = `<div style="padding:24px;color:var(--muted)">No history yet — search a city to save results.</div>`;
+  } else {
+    items.forEach((it,idx)=>{
+      const card = document.createElement('div');
+      card.className='hist-card';
+      card.style.background = `linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01))`;
+      card.style.border = `1px solid var(--history-border)`;
+      card.innerHTML = `
+        <div class="hist-city">${escapeHtml(it.city)}</div>
+        <div class="hist-meta">${escapeHtml(it.snapshot)}</div>
+        <div class="hist-temp">${it.temps[0]}°C • ${escapeHtml(it.summary)}</div>
+        <div style="margin-top:10px;font-size:13px;color:var(--muted)">Trend: ${it.temps.slice(0,6).join(', ')}${it.temps.length>6 ? '...' : ''}</div>
+        <div class="card-actions">
+          <button class="small-btn copy-btn">Copy</button>
+          <button class="small-btn load-btn">Load</button>
+        </div>
+      `;
+      historyGrid.appendChild(card);
+      setTimeout(()=> card.classList.add('show'), 60*idx);
+
+      card.querySelector('.copy-btn').addEventListener('click', ()=>{
+        navigator.clipboard?.writeText(JSON.stringify(it, null, 2)); flashTiny('Copied to clipboard');
+      });
+      card.querySelector('.load-btn').addEventListener('click', ()=>{
+        drawChart(it.city, it.times, it.temps);
+        applyWeatherEffects(it.summary.toLowerCase());
+        set3DIcon(it.summary.toLowerCase());
+        closeHistory();
+      });
+    });
+  }
+  historyOverlay.style.display='flex';
+  setTimeout(()=> historyPanel.classList.add('show'), 24);
+}
+function closeHistory(){ historyPanel.classList.remove('show'); setTimeout(()=> historyOverlay.style.display='none', 340); }
+document.getElementById('historyBtn').addEventListener('click', openHistory);
+document.getElementById('closeHistory').addEventListener('click', closeHistory);
+historyOverlay.addEventListener('click', (e)=> { if(e.target===historyOverlay) closeHistory(); });
+
+/* export & clear */
+document.getElementById('exportHistory').addEventListener('click', ()=>{
+  const data = loadHistoryData();
+  const blob = new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'weather_history.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+});
+document.getElementById('clearHistory').addEventListener('click', ()=>{
+  if(confirm('Clear all saved history?')){ localStorage.removeItem(HISTORY_KEY); historyGrid.innerHTML=''; flashTiny('History cleared'); }
+});
+
+/* toast helper */
+function flashTiny(msg){
+  const t = document.createElement('div'); t.textContent = msg;
+  Object.assign(t.style,{position:'fixed',left:'50%',top:'12%',transform:'translateX(-50%)',padding:'10px 16px',borderRadius:'10px',background:'rgba(0,0,0,0.7)',color:'#fff',zIndex:1200});
+  document.body.append(t);
+  setTimeout(()=> t.style.opacity=0,1200);
+  setTimeout(()=> t.remove(),1700);
+}
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+/* ============================
+   Clouds / Sun management
+   ============================ */
+function spawnClouds(){
+  clearClouds();
+  for(let i=0;i<3;i++){
+    const img = document.createElement('img');
+    
+    img.style.top = (6 + i*14) + '%'; img.style.left = (-60 - i*10) + 'px';
+    img.style.opacity = 0.7 - (i*0.08); img.style.animationDelay = (i*5)+'s';
+    document.body.appendChild(img); cloudEls.push(img);
+  }
+}
+function clearClouds(){ cloudEls.forEach(c=>c.remove()); cloudEls=[]; }
+function showSun(){ removeSun(); const s=document.createElement('div'); s.className='sun'; document.body.appendChild(s); sunEl=s; }
+function removeSun(){ if(sunEl){ sunEl.remove(); sunEl=null; } }
+
+/* ============================
+   Particles: rain, snow, fog, wind
+   ============================ */
+function startRain(){ particles=[]; for(let i=0;i<220;i++){ particles.push({type:'rain', x:Math.random()*fx.width, y:Math.random()*fx.height, speed:8+Math.random()*6, length:12+Math.random()*12}); } }
+function startSnow(){ particles=[]; for(let i=0;i<140;i++){ particles.push({type:'snow', x:Math.random()*fx.width, y:Math.random()*fx.height, r:1.5+Math.random()*3, speed:0.6+Math.random()*1.2}); } }
+function startFog(){ particles=[]; for(let i=0;i<60;i++){ particles.push({type:'fog', x:Math.random()*fx.width, y:Math.random()*fx.height, r:80+Math.random()*60, alpha:0.02+Math.random()*0.03}); } }
+function startWind(){ particles=[]; for(let i=0;i<70;i++){ particles.push({type:'wind', x:Math.random()*fx.width, y:Math.random()*fx.height, speed:1+Math.random()*2}); } }
+
+/* lightning */
+function flashLightning(){ const f=document.createElement('div'); f.className='flash'; document.body.appendChild(f); f.animate([{opacity:0},{opacity:1},{opacity:0.2},{opacity:1},{opacity:0}],{duration:380,easing:'ease-in-out'}); setTimeout(()=>f.remove(),420); }
+function startThunder(){ if(thunderInterval) clearInterval(thunderInterval); thunderInterval = setInterval(()=>{ if(Math.random()<0.28) flashLightning(); }, 700); }
+function stopThunder(){ if(thunderInterval){ clearInterval(thunderInterval); thunderInterval=null; } }
+function clearExtras(){ clearClouds(); removeSun(); particles=[]; stopThunder(); }
+
+/* ============================
+   Apply weather visual effects
+   ============================ */
+function applyWeatherEffects(cond){
+  cond = (cond||'').toLowerCase();
+  // background adapt
+  if(cond.includes('rain')) document.body.style.background = 'linear-gradient(135deg,#a0c4ff,#bde0fe)';
+  else if(cond.includes('snow')) document.body.style.background = 'linear-gradient(135deg,#f8fbff,#e6f2ff)';
+  else if(cond.includes('thunder')) document.body.style.background = 'linear-gradient(135deg,#23262b,#0b1b2b)';
+  else if(cond.includes('cloud')) document.body.style.background = 'linear-gradient(135deg,#e7eefc,#f3f3ff)';
+  else document.body.style.background = 'linear-gradient(135deg,#fff1e6,#fff6f0)';
+
+  clearExtras();
+  if(cond.includes('rain')){ startRain(); spawnClouds(); }
+  else if(cond.includes('snow')){ startSnow(); spawnClouds(); }
+  else if(cond.includes('thunder')){ startRain(); spawnClouds(); startThunder(); }
+  else if(cond.includes('cloud')){ startFog(); spawnClouds(); }
+  else { showSun(); startWind(); }
+}
+function drawChart(city,times,temps){
+  if(chart) chart.destroy();
+  const ctx = chartCanvas.getContext('2d');
+  
+  // create gradient based on min/max temp
+  const minTemp = Math.min(...temps);
+  const maxTemp = Math.max(...temps);
+  const gradient = ctx.createLinearGradient(0,0,0,chartCanvas.height);
+  gradient.addColorStop(0, '#ff4081');   // hot
+  gradient.addColorStop(1, '#00bcd4');   // cold
+
+  chart = new Chart(ctx,{
+    type:'line',
+    data:{
+      labels:times,
+      datasets:[{
+        label:`Temperature in ${city}`,
+        data:temps,
+        borderWidth:3,
+        borderColor:gradient,
+        backgroundColor:'rgba(255,64,129,0.14)',
+        tension:0.36,
+        fill:true,
+        pointRadius:3
+      }]
+    },
+    options:{
+      maintainAspectRatio:false,
+      elements:{point:{radius:3}},
+      plugins:{legend:{display:false}}
+    }
+  });
+}
+
+
+/* ============================
+   Set 3D icon with fade/tilt
+   ============================ */
+function set3DIcon(cond){
+  const icon=document.getElementById('weatherIcon3D');
+  icon.style.opacity=0; icon.style.display='block'; icon.style.transform='scale(.98)';
+  if(cond.includes('rain')) icon.src="https://static.vecteezy.com/system/resources/previews/012/066/505/original/sunny-and-rainy-day-weather-forecast-icon-meteorological-sign-3d-render-png.png";
+  else if(cond.includes('snow')) icon.src="https://img.freepik.com/premium-vector/button-icon-weather-mobile-app-website-snow-weather-forecast-element-cloud-snowflakes-3d_313242-1440.jpg";
+  else if(cond.includes('cloud')) icon.src="https://tse2.mm.bing.net/th/id/OIP.9SmH6QOumZ61x5FqRuBc3AHaEK?pid=Api&P=0&h=180";
+  else if(cond.includes('thunder')) icon.src="https://static.vecteezy.com/system/resources/previews/012/806/415/original/3d-cartoon-weather-rain-clouds-with-thunderstorm-dark-cloud-sign-with-lightning-isolated-on-transparent-background-3d-render-illustration-png.png";
+  else icon.src="https://static.vecteezy.com/system/resources/previews/021/692/821/original/cute-3d-cartoon-weather-icons-set-sun-moon-cloud-rain-rain-drop-vector.jpg";
+  setTimeout(()=>{ icon.style.opacity=1; icon.style.transform='scale(1)'; }, 120);
+}
+
+/* ============================
+   Animate loop for particles
+   ============================ */
+function animate(){
+  fxCtx.clearRect(0,0,fx.width,fx.height);
+  for(const p of particles){
+    fxCtx.beginPath();
+    if(p.type==='rain'){
+      fxCtx.strokeStyle = 'rgba(120,120,255,0.42)'; fxCtx.lineWidth = 1.6;
+      fxCtx.moveTo(p.x,p.y); fxCtx.lineTo(p.x,p.y+p.length); fxCtx.stroke();
+      p.y += p.speed; p.x += 0.6; if(p.y>fx.height){ p.y=-20; p.x=Math.random()*fx.width; }
+    } else if(p.type==='snow'){
+      fxCtx.fillStyle = 'rgba(255,255,255,0.95)'; fxCtx.beginPath(); fxCtx.arc(p.x,p.y,p.r,0,Math.PI*2); fxCtx.fill();
+      p.y += p.speed; p.x += Math.sin(p.y*0.01); if(p.y>fx.height){ p.y=-10; p.x=Math.random()*fx.width; }
+    } else if(p.type==='fog'){
+      fxCtx.fillStyle = `rgba(255,255,255,${p.alpha})`; fxCtx.beginPath(); fxCtx.arc(p.x,p.y,p.r,0,Math.PI*2); fxCtx.fill();
+      p.x += 0.1; if(p.x>fx.width+100) p.x=-100;
+    } else if(p.type==='wind'){
+      fxCtx.fillStyle='rgba(255,255,255,0.10)'; fxCtx.fillRect(p.x,p.y,24,2);
+      p.x += p.speed + 2; if(p.x>fx.width) p.x=-40;
+    }
+  }
+  requestAnimationFrame(animate);
+}
+animate();
+
+/* ============================
+   UI interactions: show trend
+   ============================ */
+document.getElementById('showBtn').addEventListener('click', async () => {
+  const city = document.getElementById('city').value.trim();
+  if (!city) return alert('Enter a city');
+
+  loader.style.display = 'inline-block';
+
+  const data = await fetchWeatherData(city);
+
+  if (!data) {
+    loader.style.display = 'none';
+    return;
+  }
+
+  drawChart(data.city, data.times, data.temps);
+  applyWeatherEffects("clear");
+  set3DIcon("clear");
+
+  loader.style.display = 'none';
+});
+document.getElementById('city').addEventListener('keydown',(e)=>{ if(e.key==='Enter') document.getElementById('showBtn').click(); });
+
+/* ============================
+   Colorful Dark Mode toggle (fixed)
+   ============================ */
+const darkBtn = document.getElementById('darkToggle');
+let darkOn = false;
+function updateModeText(){
+  darkBtn.textContent = darkOn ? 'Mode: Neon Dark' : 'Mode: Colorful';
+}
+darkBtn.addEventListener('click', ()=>{
+  darkOn = !darkOn;
+  document.body.classList.toggle('colorful-dark', darkOn);
+  updateModeText();
+
+  // subtle extra visual feedback: change some element glow quickly
+  if(darkOn){
+    document.documentElement.style.setProperty('--card-glow', '0 18px 70px rgba(99,91,255,0.24)');
+  } else {
+    document.documentElement.style.setProperty('--card-glow', '0 12px 40px rgba(124,77,255,0.12)');
+  }
+});
+
+/* ============================
+   Demo on load
+   ============================ */
+window.addEventListener('load', ()=>{
+  const demo = demoData('Demo City');
+  drawChart(demo.city, demo.times, demo.temps);
+  applyWeatherEffects('cloud');
+  set3DIcon('cloud');
+  spawnClouds();
+});
+
+/* cleanup */
+window.addEventListener('beforeunload', ()=>{ if(thunderInterval) clearInterval(thunderInterval); });
+/* ============================
+   Apply weather visual effects
+   ============================ */
+   function applyWeatherEffects(cond){
+  cond = (cond||'').toLowerCase();
+  // background adapt
+  if(cond.includes('rain')){
+    document.body.style.background = 'linear-gradient(135deg,#a0c4ff,#bde0fe)';
+    startRain(); spawnClouds(); stopThunder();
+  }
+  else if(cond.includes('snow')){
+    document.body.style.background = 'linear-gradient(135deg,#f8fbff,#e6f2ff)';
+    startSnow(); spawnClouds(); stopThunder();
+  }
+  else if(cond.includes('thunder')){
+    document.body.style.background = 'linear-gradient(135deg,#23262b,#0b1b2b)';
+    startRain(); spawnClouds(); startThunder();
+  }
+  else if(cond.includes('cloud')){
+    document.body.style.background = 'linear-gradient(135deg,#e7eefc,#f3f3ff)';
+    startFog(); spawnClouds(); stopThunder();
+  }
+  else{
+    // clear/sunny
+    document.body.style.background = 'linear-gradient(135deg,#fff1e6,#fff6f0)';
+    clearExtras(); showSun(); startWind();
+  }
+}
+
+/* ============================
+   Set 3D icon with fade/tilt
+   ============================ */
+function set3DIcon(cond){
+  const icon=document.getElementById('weatherIcon3D');
+  icon.style.opacity=0;
+  icon.style.display='block';
+  icon.style.transform='scale(.98)';
+  
+  cond = (cond||'').toLowerCase();
+
+  // Match based on realistic main weather types
+  if(cond.includes('rain')){
+    icon.src="https://static.vecteezy.com/system/resources/previews/012/066/505/original/sunny-and-rainy-day-weather-forecast-icon-meteorological-sign-3d-render-png.png";
+  }
+  else if(cond.includes('snow')){
+    icon.src="https://img.freepik.com/premium-vector/button-icon-weather-mobile-app-website-snow-weather-forecast-element-cloud-snowflakes-3d_313242-1440.jpg";
+  }
+  else if(cond.includes('cloud')){
+    icon.src="https://tse2.mm.bing.net/th/id/OIP.9SmH6QOumZ61x5FqRuBc3AHaEK?pid=Api&P=0&h=180";
+  }
+  else if(cond.includes('thunder')){
+    icon.src="https://static.vecteezy.com/system/resources/previews/012/806/415/original/3d-cartoon-weather-rain-clouds-with-thunderstorm-dark-cloud-sign-with-lightning-isolated-on-transparent-background-3d-render-illustration-png.png";
+  }
+  else if(cond.includes('clear') || cond.includes('sun')){
+    icon.src="https://static.vecteezy.com/system/resources/previews/021/692/821/original/cute-3d-cartoon-weather-icons-set-sun-moon-cloud-rain-rain-drop-vector.jpg";
+  }
+  else{
+    icon.style.display='none'; // hide if unknown
+  }
+
+  setTimeout(()=>{
+    icon.style.opacity=1;
+    icon.style.transform='scale(1)';
+  }, 120);
+}
+function openHistory() {
+  const items = loadHistoryData();
+  historyGrid.innerHTML = '';
+
+  if (items.length === 0) {
+    historyGrid.innerHTML = `<div style="padding:24px;color:var(--muted)">No history yet — search a city to save results.</div>`;
+  } else {
+    items.forEach((it, idx) => {
+      const card = document.createElement('div');
+      card.className = 'hist-card';
+      card.style.background = `linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01))`;
+      card.style.border = `1px solid var(--history-border)`;
+
+      card.innerHTML = `
+        <div class="hist-city">${escapeHtml(it.city)}</div>
+        <div class="hist-meta">${escapeHtml(it.snapshot)}</div>
+        <div class="hist-temp">${it.temps[0]}°C • ${escapeHtml(it.summary)}</div>
+        <div style="margin-top:10px;font-size:13px;color:var(--muted)">
+          Trend: ${it.temps.slice(0,6).join(', ')}${it.temps.length > 6 ? '...' : ''}
+        </div>
+        <div class="card-actions">
+          <button class="small-btn copy-btn">Copy</button>
+          <button class="small-btn load-btn">Load</button>
+        </div>
+      `;
+
+      historyGrid.appendChild(card);
+      setTimeout(() => card.classList.add('show'), 60 * idx);
+
+      // Copy button
+      card.querySelector('.copy-btn').addEventListener('click', () => {
+        navigator.clipboard?.writeText(JSON.stringify(it, null, 2));
+        flashTiny('Copied to clipboard');
+      });
+
+      // Load button
+      card.querySelector('.load-btn').addEventListener('click', () => {
+        drawChart(it.city, it.times, it.temps);
+        applyWeatherEffects(it.summary.toLowerCase());
+        set3DIcon(it.summary.toLowerCase());
+        closeHistory();
+      });
+    });
+  }
+
+  // Show overlay
+  historyOverlay.style.display = 'flex';
+  setTimeout(() => historyPanel.classList.add('show'), 20);
+}
+
+// Helper to escape HTML
+function escapeHtml(str) {
+  return str.replace(/[&<>"']/g, function(m) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]; });
+}
+
+// Close history
+function closeHistory() {
+  historyPanel.classList.remove('show');
+  setTimeout(() => { historyOverlay.style.display = 'none'; }, 400);
+}
+const rainSound = document.getElementById('rainSound');
+const thunderSound = document.getElementById('thunderSound');
+
+function applyWeatherEffects(cond){
+  cond = (cond||'').toLowerCase();
+  clearExtras();
+  
+  // Stop all sounds first
+  rainSound.pause(); rainSound.currentTime=0;
+  thunderSound.pause(); thunderSound.currentTime=0;
+
+  if(cond.includes('rain')){
+    document.body.style.background = 'linear-gradient(135deg,#a0c4ff,#bde0fe)';
+    startRain(); spawnClouds(); stopThunder();
+    rainSound.play();
+  }
+  else if(cond.includes('snow')){
+    document.body.style.background = 'linear-gradient(135deg,#f8fbff,#e6f2ff)';
+    startSnow(); spawnClouds(); stopThunder();
+  }
+  else if(cond.includes('thunder')){
+    document.body.style.background = 'linear-gradient(135deg,#23262b,#0b1b2b)';
+    startRain(); spawnClouds(); startThunder();
+    rainSound.play(); thunderSound.play();
+  }
+  else if(cond.includes('cloud')){
+    document.body.style.background = 'linear-gradient(135deg,#e7eefc,#f3f3ff)';
+    startFog(); spawnClouds(); stopThunder();
+  }
+  else{
+    document.body.style.background = 'linear-gradient(135deg,#fff1e6,#fff6f0)';
+    showSun(); startWind();
+  }
+}
+function animateCloudsWithWind(){
+  const windSpeed = particles.filter(p=>p.type==='wind').length;
+  cloudEls.forEach((c,i)=>{
+    const duration = 55 - windSpeed*0.5; // clouds move faster with stronger wind
+    c.style.animation = `cloudFloat ${duration}s linear infinite`;
+  });
+}
+animateCloudsWithWind();
+
+
+
+
+
+</script>
+
+</body>
+</html> 
