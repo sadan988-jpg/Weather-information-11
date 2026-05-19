@@ -6,36 +6,33 @@
   <title>Weather Trend Visualizer — Smart AI Dashboard</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     /* ------------------ THEME VARIABLES ------------------ */
     :root {
       --bg-light-1: linear-gradient(135deg, #e3f2fd, #fce4ec);
-      --bg-light-2: linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.06));
       --text: #0f1720;
-      --muted: rgba(15, 23, 32, 0.55);
-      --glass: rgba(255, 255, 255, 0.12);
+      --muted: rgba(15, 23, 32, 0.65);
+      --glass: rgba(255, 255, 255, 0.45);
+      --glass-border: rgba(255, 255, 255, 0.5);
       --accent1: #ff4081;
       --accent2: #7c4dff;
       --accent3: #00bcd4;
-      --card-glow: 0 12px 40px rgba(124, 77, 255, 0.12);
-      --icon-glow: 0 0 22px rgba(255, 64, 129, 0.14);
-      --history-border: rgba(15, 23, 32, 0.06);
+      --card-glow: 0 12px 32px rgba(2, 6, 23, 0.06);
     }
 
-    /* Dark / Colorful neon theme variables */
     body.colorful-dark {
       --bg-light-1: radial-gradient(circle at 10% 10%, #140032 0%, #08020a 60%, #000000 100%);
-      --bg-light-2: linear-gradient(180deg, rgba(8, 2, 10, 0.32), rgba(0, 0, 0, 0.08));
       --text: #e7f3ff;
-      --muted: rgba(231, 243, 255, 0.55);
-      --glass: rgba(10, 6, 20, 0.36);
+      --muted: rgba(231, 243, 255, 0.65);
+      --glass: rgba(18, 12, 32, 0.5);
+      --glass-border: rgba(255, 255, 255, 0.1);
       --accent1: #ff5ac6;
       --accent2: #635bff;
       --accent3: #00f0ff;
-      --card-glow: 0 16px 60px rgba(99, 91, 255, 0.18);
-      --icon-glow: 0 0 32px rgba(0, 240, 255, 0.12);
-      --history-border: rgba(255, 255, 255, 0.06);
+      --card-glow: 0 16px 40px rgba(0, 0, 0, 0.4);
     }
 
     /* ------------------ GLOBAL ------------------ */
@@ -43,12 +40,11 @@
       margin: 0;
       padding: 0;
       box-sizing: border-box;
-      font-family: "Poppins", system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial
+      font-family: "Poppins", sans-serif;
     }
 
-    html,
-    body {
-      height: 100%
+    html, body {
+      height: 100%;
     }
 
     body {
@@ -56,183 +52,11 @@
       color: var(--text);
       min-height: 100vh;
       overflow: hidden;
-      padding: 22px;
+      padding: 24px;
       transition: background .7s ease, color .4s;
     }
 
-    @keyframes sunPulse {
-      0% {
-        transform: scale(1);
-        box-shadow: 0 0 40px 10px #ffeb3b;
-        opacity: 0.9;
-      }
-
-      25% {
-        transform: scale(1.1);
-        box-shadow: 0 0 80px 28px #ffd54f;
-        opacity: 1;
-      }
-
-      50% {
-        transform: scale(1.15);
-        box-shadow: 0 0 120px 36px #ffd54f;
-        opacity: 0.95;
-      }
-
-      75% {
-        transform: scale(1.12);
-        box-shadow: 0 0 100px 32px #ffca28;
-        opacity: 1;
-      }
-
-      100% {
-        transform: scale(1);
-        box-shadow: 0 0 40px 10px #ffeb3b;
-        opacity: 0.9;
-      }
-    }
-
-    /* APP CONTAINER */
-    .container {
-      max-width: 980px;
-      margin: 22px auto;
-      padding: 28px;
-      border-radius: 20px;
-      backdrop-filter: blur(12px) saturate(130%);
-      background: var(--bg-light-2);
-      box-shadow: 0 12px 40px rgba(2, 6, 23, 0.12);
-      position: relative;
-      z-index: 10;
-      overflow: visible;
-      transition: all .45s ease;
-    }
-
-    /* HEADER */
-    .header-row {
-      display: flex;
-      gap: 12px;
-      align-items: center;
-      justify-content: space-between
-    }
-
-    .title {
-      font-size: 22px;
-      font-weight: 800;
-      letter-spacing: 0.2px
-    }
-
-    .subtitle {
-      font-size: 13px;
-      color: var(--muted);
-      margin-top: 6px;
-      line-height: 1.6
-    }
-
-    /* CONTROLS */
-    .controls {
-      display: flex;
-      gap: 10px;
-      align-items: center
-    }
-
-    #city {
-      width: 320px;
-      max-width: 40%;
-      padding: 12px 18px;
-      border-radius: 999px;
-      border: none;
-      font-size: 15px;
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.8));
-      box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.06);
-      transition: box-shadow .2s, transform .12s;
-    }
-
-    #city:focus {
-      outline: none;
-      box-shadow: 0 6px 30px rgba(0, 0, 0, 0.08);
-      transform: translateY(-1px);
-    }
-
-    /* Buttons - colorful gradients */
-    .btn {
-      padding: 10px 16px;
-      border-radius: 999px;
-      border: none;
-      cursor: pointer;
-      font-weight: 700;
-      color: white;
-      box-shadow: 0 10px 30px rgba(2, 6, 23, 0.08);
-      transition: transform .18s, filter .18s;
-    }
-
-    .btn:active {
-      transform: translateY(1px)
-    }
-
-    #showBtn {
-      background: linear-gradient(135deg, var(--accent1), #ff80ab);
-      filter: drop-shadow(0 8px 28px rgba(255, 64, 129, 0.18))
-    }
-
-    #historyBtn {
-      background: linear-gradient(135deg, var(--accent2), #651fff);
-      filter: drop-shadow(0 8px 28px rgba(124, 77, 255, 0.18))
-    }
-
-    #darkToggle {
-      background: linear-gradient(135deg, var(--accent3), #00bcd4);
-      color: #012;
-      font-weight: 800;
-      box-shadow: 0 12px 40px rgba(0, 188, 212, 0.12)
-    }
-
-    /* tiny loader */
-    .loader {
-      width: 36px;
-      height: 36px;
-      border: 5px solid rgba(255, 255, 255, 0.22);
-      border-top: 5px solid var(--accent1);
-      border-radius: 50%;
-      display: none;
-      margin-left: 8px;
-      animation: spin .8s linear infinite
-    }
-
-    @keyframes spin {
-      to {
-        transform: rotate(360deg)
-      }
-    }
-
-    /* metric & chart layout */
-    .metrics {
-      display: flex;
-      gap: 18px;
-      margin-top: 16px;
-      align-items: flex-start;
-      flex-wrap: wrap
-    }
-
-    .chart-box {
-      margin-top: 8px;
-      padding: 12px;
-      border-radius: 14px;
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent);
-      height: 280px;
-    }
-
-    /* effects canvas */
-    #effects {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      z-index: -3;
-      pointer-events: none
-    }
-
-    /* parallax background */
+    /* ------------------ PHYSICS CANVAS & BACKGROUNDS ------------------ */
     .parallax {
       position: fixed;
       top: 0;
@@ -243,43 +67,33 @@
       opacity: .06;
       z-index: -4;
       filter: blur(1px);
-      animation: drift 40s linear infinite
+      animation: drift 40s linear infinite;
     }
 
     @keyframes drift {
-      0% {
-        transform: translate(-10%, -10%)
-      }
-
-      100% {
-        transform: translate(-20%, -20%)
-      }
+      0% { transform: translate(-10%, -10%) }
+      100% { transform: translate(-20%, -20%) }
     }
 
-    /* CLOUDS */
-    .cloud {
+    #effects {
       position: fixed;
-      width: 280px;
-      opacity: .85;
-      animation: cloudFloat 55s linear infinite;
-      z-index: -2
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: -3;
+      pointer-events: none;
     }
 
-    @keyframes cloudFloat {
-      0% {
-        transform: translateX(-350px) translateY(0) scale(1)
-      }
-
-      50% {
-        transform: translateX(40vw) translateY(-12px) scale(1.06)
-      }
-
-      100% {
-        transform: translateX(110vw) translateY(0) scale(1)
-      }
+    /* Original Animations (Sun, Clouds, Flash) */
+    @keyframes sunPulse {
+      0% { transform: scale(1); box-shadow: 0 0 40px 10px #ffeb3b; opacity: 0.9; }
+      25% { transform: scale(1.1); box-shadow: 0 0 80px 28px #ffd54f; opacity: 1; }
+      50% { transform: scale(1.15); box-shadow: 0 0 120px 36px #ffd54f; opacity: 0.95; }
+      75% { transform: scale(1.12); box-shadow: 0 0 100px 32px #ffca28; opacity: 1; }
+      100% { transform: scale(1); box-shadow: 0 0 40px 10px #ffeb3b; opacity: 0.9; }
     }
-
-    /* SUN */
+    
     .sun {
       position: fixed;
       top: 6%;
@@ -290,777 +104,214 @@
       background: radial-gradient(circle, #ffd54f, #ffca28);
       box-shadow: 0 0 120px rgba(255, 213, 79, 0.14);
       animation: sunPulse 3.2s infinite alternate;
-      z-index: -2
+      z-index: -2;
     }
 
-    /* LIGHTNING FLASH */
+    .cloud {
+      position: fixed;
+      width: 280px;
+      opacity: .85;
+      animation: cloudFloat 55s linear infinite;
+      z-index: -2;
+    }
+
+    @keyframes cloudFloat {
+      0% { transform: translateX(-350px) translateY(0) scale(1) }
+      50% { transform: translateX(40vw) translateY(-12px) scale(1.06) }
+      100% { transform: translateX(110vw) translateY(0) scale(1) }
+    }
+
     .flash {
       position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      background: #fff;
-      opacity: 0;
-      pointer-events: none;
-      z-index: 9999
+      top: 0; left: 0; width: 100vw; height: 100vh;
+      background: #fff; opacity: 0; pointer-events: none; z-index: 9999;
     }
 
-    /* ICON */
-    #weatherIcon3D {
-      width: 140px;
-      height: 140px;
-      margin: 12px auto 0;
-      display: block;
-      border-radius: 16px;
-      opacity: 0;
-      transform-origin: center;
-      transition: opacity .7s, transform .5s;
-      filter: var(--icon-glow)
-    }
 
-    #weatherIcon3D:hover {
-      transform: rotateY(14deg) rotateX(6deg) scale(1.06)
-    }
-
-    /* HISTORY OVERLAY (Floating Glass Cards) */
-    .history-overlay {
-      position: fixed;
-      inset: 0;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      backdrop-filter: blur(8px) brightness(.92);
-      z-index: 60;
-      padding: 28px
-    }
-
-    .history-panel {
-      width: min(980px, 96%);
-      max-height: 86vh;
-      overflow: auto;
-      border-radius: 18px;
-      padding: 20px;
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02));
-      border: 1px solid var(--history-border);
-      box-shadow: var(--card-glow);
-      transform: translateY(12px) scale(.98);
-      opacity: 0;
-      transition: all .45s cubic-bezier(.2, .9, .2, 1);
-    }
-
-    .history-panel.show {
-      transform: translateY(0) scale(1);
-      opacity: 1
-    }
-
-    /* grid of cards */
-    .history-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-      gap: 14px;
-      margin-top: 12px
-    }
-
-    .hist-card {
-      padding: 14px;
-      border-radius: 12px;
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01));
-      border: 1px solid rgba(255, 255, 255, 0.03);
-      backdrop-filter: blur(6px);
+    /* ------------------ BENTO GRID DASHBOARD ------------------ */
+    .bento-container {
+      max-width: 1280px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
       position: relative;
-      overflow: hidden;
-      transition: all .38s ease;
-      transform: translateY(12px) scale(.97);
-      opacity: 0;
+      z-index: 10;
+      height: calc(100vh - 48px);
     }
 
-    .hist-card.show {
-      transform: translateY(0) scale(1);
-      opacity: 1
-    }
-
-    .hist-card:hover {
-      box-shadow: 0 18px 60px rgba(0, 0, 0, 0.12);
-      transform: translateY(-6px) scale(1.02)
-    }
-
-    .hist-city {
-      font-weight: 800;
-      font-size: 15px;
-      color: var(--text);
-      margin-bottom: 6px
-    }
-
-    .hist-meta {
-      font-size: 13px;
-      color: var(--muted);
-      margin-bottom: 10px
-    }
-
-    .hist-temp {
-      font-weight: 800;
-      font-size: 22px
-    }
-
-    .card-actions {
-      display: flex;
-      gap: 8px;
-      position: absolute;
-      top: 10px;
-      right: 10px
-    }
-
-    .small-btn {
-      padding: 6px 8px;
-      border-radius: 8px;
-      border: none;
-      font-size: 12px;
-      cursor: pointer;
-      background: rgba(0, 0, 0, 0.08);
-      color: var(--text)
-    }
-
-    .small-btn:hover {
-      transform: translateY(-3px)
-    }
-
-    .history-footer {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      justify-content: space-between;
-      margin-top: 12px;
-      color: var(--muted)
-    }
-
-    .history-overlay.active {
-      display: flex !important;
-    }
-
-    /* =======================================================
-   NEW AGENTIC FEATURES & SLEEK GLASSMORPHIC CSS SNIPPETS
-   ======================================================= */
-
-    /* 1. HEALTH RISK ADVISORY GRID */
-    .health-advisory-container {
-      display: none;
-      /* Managed dynamically by app.js */
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 14px;
-      margin-top: 18px;
-      width: 100%;
-    }
-
-    .health-card {
-      padding: 14px 18px;
-      border-radius: 14px;
+    .bento-card {
       background: var(--glass);
-      backdrop-filter: blur(14px) saturate(120%);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      box-shadow: 0 8px 32px rgba(2, 6, 23, 0.06);
-      transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.3s;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      animation: slideUpAdvisory 0.4s ease-out;
-    }
-
-    .health-card:hover {
-      transform: translateY(-3px);
+      backdrop-filter: blur(16px) saturate(140%);
+      border: 1px solid var(--glass-border);
+      border-radius: 20px;
+      padding: 18px 22px;
       box-shadow: var(--card-glow);
-    }
-
-    .health-card-header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      font-weight: 800;
-    }
-
-    .health-card-icon {
-      font-size: 18px;
-    }
-
-    .health-card-body {
-      font-size: 13px;
-      color: var(--muted);
-      line-height: 1.4;
-      font-weight: 500;
-    }
-
-    /* Advisories specific color coding highlights */
-    .advisory-uv {
-      border-left: 4px solid #ffd54f;
-    }
-
-    .advisory-uv .health-card-label {
-      color: #ffd54f;
-    }
-
-    .advisory-humidity {
-      border-left: 4px solid #00bcd4;
-    }
-
-    .advisory-humidity .health-card-label {
-      color: #00bcd4;
-    }
-
-    .advisory-temp {
-      border-left: 4px solid #ff4081;
-    }
-
-    .advisory-temp .health-card-label {
-      color: #ff4081;
-    }
-
-    @keyframes slideUpAdvisory {
-      from {
-        transform: translateY(12px);
-        opacity: 0;
-      }
-
-      to {
-        transform: translateY(0);
-        opacity: 1;
-      }
-    }
-
-    /* 2. EMERGENCY DANGER MODAL OVERLAY (High priority attention) */
-    .emergency-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.72);
-      backdrop-filter: blur(16px) brightness(0.35);
-      display: none;
-      /* Managed dynamically */
-      align-items: center;
-      justify-content: center;
-      z-index: 9999;
-      padding: 24px;
-    }
-
-    .emergency-overlay.active {
-      display: flex !important;
-    }
-
-    .emergency-modal {
-      width: min(520px, 94%);
-      background: linear-gradient(135deg, rgba(255, 30, 86, 0.18) 0%, rgba(12, 2, 24, 0.85) 100%);
-      border: 2px solid #ff3366;
-      border-radius: 24px;
-      padding: 36px 32px;
-      color: #ffffff;
-      box-shadow: 0 0 60px rgba(255, 51, 102, 0.45), inset 0 0 25px rgba(255, 51, 102, 0.25);
-      backdrop-filter: blur(20px);
-      text-align: center;
-      position: relative;
-      overflow: hidden;
-      transform: scale(0.92);
-      opacity: 0;
-      animation: scaleInEmergency 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-    }
-
-    .emergency-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 72px;
-      height: 72px;
-      border-radius: 50%;
-      background: rgba(255, 51, 102, 0.2);
-      border: 2px solid #ff3366;
-      color: #ff3366;
-      font-size: 36px;
-      margin-bottom: 22px;
-      animation: pulseIcon 1.4s infinite alternate;
-    }
-
-    .emergency-title {
-      font-size: 26px;
-      font-weight: 800;
-      letter-spacing: 0.6px;
-      color: #ff3366;
-      margin-bottom: 12px;
-      text-transform: uppercase;
-      text-shadow: 0 0 15px rgba(255, 51, 102, 0.4);
-    }
-
-    .emergency-desc {
-      font-size: 14.5px;
-      line-height: 1.6;
-      color: rgba(255, 255, 255, 0.88);
-      margin-bottom: 28px;
-    }
-
-    .emergency-btn {
-      width: 100%;
-      padding: 13px 24px;
-      border-radius: 999px;
-      border: none;
-      background: linear-gradient(135deg, #ff1e56, #ff80ab);
-      color: #fff;
-      font-weight: 700;
-      font-size: 15px;
-      cursor: pointer;
-      box-shadow: 0 8px 24px rgba(255, 30, 86, 0.4);
-      transition: transform 0.2s, box-shadow 0.2s;
-    }
-
-    .emergency-btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 12px 30px rgba(255, 30, 86, 0.5);
-    }
-
-    .emergency-btn:active {
-      transform: translateY(1px);
-    }
-
-    @keyframes scaleInEmergency {
-      to {
-        transform: scale(1);
-        opacity: 1;
-      }
-    }
-
-    @keyframes pulseIcon {
-      0% {
-        transform: scale(1);
-        box-shadow: 0 0 0 0 rgba(255, 51, 102, 0.4);
-      }
-
-      100% {
-        transform: scale(1.1);
-        box-shadow: 0 0 25px 8px rgba(255, 51, 102, 0.2);
-      }
-    }
-
-    /* 3. AI VOICE MICROPHONE BUTTON & PULSING INDICATOR */
-    .btn-mic {
-      width: 44px;
-      height: 44px;
-      border-radius: 50%;
-      border: none;
-      background: linear-gradient(135deg, var(--accent2), var(--accent1));
-      color: white;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 18px;
-      box-shadow: 0 8px 24px rgba(124, 77, 255, 0.22);
-      transition: transform 0.2s, box-shadow 0.2s;
-      flex-shrink: 0;
-    }
-
-    .btn-mic:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 12px 28px rgba(124, 77, 255, 0.35);
-    }
-
-    .btn-mic.pulse-active {
-      animation: pulseMic 1.2s infinite alternate;
-    }
-
-    .listening-pulse {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: #ff4081;
-      display: none;
-      /* Managed dynamically */
-      margin-left: 4px;
-      animation: pulseDot 1s infinite alternate;
-      flex-shrink: 0;
-    }
-
-    .listening-pulse.active {
-      display: inline-block !important;
-    }
-
-    @keyframes pulseMic {
-      0% {
-        transform: scale(1);
-        box-shadow: 0 0 0 0 rgba(255, 64, 129, 0.6);
-      }
-
-      100% {
-        transform: scale(1.15);
-        box-shadow: 0 0 24px 8px rgba(255, 64, 129, 0.3);
-      }
-    }
-
-    @keyframes pulseDot {
-      0% {
-        transform: scale(0.8);
-        opacity: 0.5;
-      }
-
-      100% {
-        transform: scale(1.3);
-        opacity: 1;
-      }
-    }
-
-    /* 4. FLOATING SPEECH BALOON HUD */
-    .speech-balloon {
-      position: fixed;
-      bottom: 120px;
-      right: 24px;
-      max-width: 330px;
-      background: var(--glass);
-      backdrop-filter: blur(14px) saturate(130%);
-      border: 1px solid var(--history-border);
-      box-shadow: var(--card-glow);
-      border-radius: 18px;
-      padding: 16px 20px;
-      color: var(--text);
-      font-size: 13.5px;
-      line-height: 1.5;
-      z-index: 999;
-      display: none;
-      transform: translateY(20px);
-      opacity: 0;
-      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.2);
-      cursor: pointer;
-    }
-
-    .speech-balloon.show {
-      display: block;
-      transform: translateY(0);
-      opacity: 1;
-    }
-
-    .speech-balloon strong {
-      color: var(--accent1);
-    }
-
-    /* 5. COLLAPSIBLE AI THOUGHT STREAM LOGGING CONSOLE (DEBUG TOGGLE) */
-    .debug-panel {
-      position: fixed;
-      bottom: 24px;
-      right: 24px;
-      width: 390px;
-      height: 380px;
-      background: rgba(10, 5, 22, 0.94);
-      border: 1px solid rgba(0, 240, 255, 0.16);
-      border-radius: 18px;
-      box-shadow: 0 16px 40px rgba(0, 240, 255, 0.08);
-      z-index: 1000;
-      overflow: hidden;
-      transition: height 0.45s cubic-bezier(0.2, 0.9, 0.2, 1), transform 0.4s;
+      transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.3s;
       display: flex;
       flex-direction: column;
     }
+    .bento-card:hover { transform: translateY(-3px); box-shadow: 0 18px 40px rgba(0,0,0,0.12); }
+    
+    .card-header { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
 
-    .debug-panel.collapsed {
-      height: 48px;
-    }
+    /* Top Bar */
+    .bento-top-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; padding: 14px 22px; flex-direction: row; flex-shrink: 0; }
+    .title-group .title { font-size: 20px; font-weight: 800; }
+    .title-group .subtitle { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+    .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    
+    input, button { font-family: inherit; }
+    #city { padding: 10px 18px; border-radius: 999px; border: 1px solid var(--glass-border); background: rgba(255,255,255,0.25); color: var(--text); font-size: 14px; width: 240px; backdrop-filter: blur(8px); outline: none; transition: box-shadow 0.2s; }
+    #city:focus { box-shadow: 0 0 0 3px rgba(124, 77, 255, 0.25); }
+    
+    .btn { padding: 10px 18px; border-radius: 999px; border: none; font-weight: 700; font-size: 13.5px; color: #fff; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; box-shadow: 0 8px 18px rgba(0,0,0,0.12); }
+    .btn:hover { transform: translateY(-2px); box-shadow: 0 10px 22px rgba(0,0,0,0.2); }
+    .btn:active { transform: translateY(1px); }
+    #showBtn { background: linear-gradient(135deg, var(--accent1), #ff80ab); }
+    #darkToggle { background: linear-gradient(135deg, var(--accent3), #00bcd4); color: #012; }
+    
+    /* Mic Button */
+    .btn-mic { width: 42px; height: 42px; border-radius: 50%; border: none; background: linear-gradient(135deg, var(--accent2), var(--accent1)); color: white; cursor: pointer; font-size: 18px; box-shadow: 0 8px 24px rgba(124, 77, 255, 0.3); transition: transform 0.2s; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .btn-mic.pulse-active { animation: pulseMic 1.2s infinite alternate; }
+    .listening-pulse { width: 10px; height: 10px; border-radius: 50%; background: #ff4081; display: none; margin-left: 4px; animation: pulseDot 1s infinite alternate; }
+    .listening-pulse.active { display: inline-block !important; }
+    
+    @keyframes pulseMic { 0% { box-shadow: 0 0 0 0 rgba(255, 64, 129, 0.6); } 100% { box-shadow: 0 0 24px 8px rgba(255, 64, 129, 0.3); } }
+    @keyframes pulseDot { 0% { transform: scale(0.8); opacity: 0.5; } 100% { transform: scale(1.3); opacity: 1; } }
 
-    .debug-header {
-      background: linear-gradient(90deg, #13002f 0%, #000000 100%);
-      padding: 12px 18px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      cursor: pointer;
-      border-bottom: 1px solid rgba(0, 240, 255, 0.1);
-      user-select: none;
-    }
+    /* Map Search & Danger Zones */
+    .map-header { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+    .map-search-input { padding: 6px 12px; border-radius: 12px; border: 1px solid var(--glass-border); background: rgba(255,255,255,0.15); color: var(--text); font-size: 11.5px; width: 160px; outline: none; transition: box-shadow 0.2s; }
+    .map-search-input::placeholder { color: var(--muted); }
+    .map-search-input:focus { border-color: var(--accent2); box-shadow: 0 0 0 2px rgba(124, 77, 255, 0.2); }
+    
+    @keyframes dangerPulse { 0% { fill-opacity: 0.8; stroke-width: 2px; } 100% { fill-opacity: 0.2; stroke-width: 6px; } }
+    .pulse-danger { animation: dangerPulse 1s infinite alternate; }
 
-    .debug-title-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 12px;
-      font-weight: 700;
-      color: #00f0ff;
-      letter-spacing: 0.8px;
-      text-transform: uppercase;
-    }
+    /* Middle Grid */
+    .bento-middle-grid { display: grid; grid-template-columns: 2.5fr 1fr; gap: 16px; flex-shrink: 0; }
+    
+    /* Hero Card (Current Weather) */
+    .hero-content { display: flex; align-items: center; gap: 28px; padding: 4px 0; }
+    .hero-icon { width: 140px; height: 140px; border-radius: 20px; filter: drop-shadow(0 12px 24px rgba(0,0,0,0.15)); transition: transform 0.4s ease; display: none; }
+    .hero-icon:hover { transform: rotate(-5deg) scale(1.05); }
+    .hero-details h1 { font-size: 60px; font-weight: 800; line-height: 1.1; margin-bottom: 4px; background: linear-gradient(135deg, var(--accent2), var(--accent1)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .hero-details h2 { font-size: 22px; font-weight: 600; color: var(--text); margin-bottom: 16px; }
+    .hero-metrics { display: flex; gap: 10px; flex-wrap: wrap; }
+    .metric-pill { background: rgba(255, 255, 255, 0.25); border: 1px solid var(--glass-border); padding: 7px 14px; border-radius: 12px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; backdrop-filter: blur(8px); }
+    
+    /* AQI Card */
+    .aqi-card { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+    .aqi-ring { width: 130px; height: 130px; border-radius: 50%; border: 12px solid #4caf50; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px; position: relative; font-size: 34px; font-weight: 800; color: var(--text); box-shadow: inset 0 4px 12px rgba(0,0,0,0.1), 0 8px 24px rgba(76, 175, 80, 0.2); transition: border-color 0.4s, box-shadow 0.4s; }
+    .aqi-status { font-size: 16px; font-weight: 700; color: #4caf50; transition: color 0.4s; }
 
-    .debug-badge {
-      background: rgba(0, 240, 255, 0.16);
-      color: #00f0ff;
-      font-size: 8.5px;
-      padding: 2px 7px;
-      border-radius: 8px;
-      text-transform: uppercase;
-      font-weight: 800;
-    }
+    /* Bottom Grid */
+    .bento-bottom-grid { display: grid; grid-template-columns: 1fr 1.6fr 1.2fr; gap: 16px; flex: 1; min-height: 0; }
+    
+    .map-container { flex: 1; border-radius: 14px; overflow: hidden; background: rgba(0,0,0,0.05); min-height: 0; height: 100%; }
+    .chart-box { flex: 1; width: 100%; position: relative; min-height: 0; height: 100%; }
 
-    .debug-controls {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
+    /* AI & Alerts Card */
+    .ai-alert-card { display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
+    .ai-recommendations-box { flex: 1; background: rgba(255,255,255,0.15); border: 1px solid var(--glass-border); border-radius: 14px; padding: 16px; font-size: 13.5px; line-height: 1.5; color: var(--text); overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+    .ai-empty-state { color: var(--muted); font-style: italic; font-size: 13px; }
+    
+    .health-alert-banner { display: none; padding: 10px 14px; border-radius: 10px; background: rgba(255, 51, 102, 0.15); border-left: 4px solid #ff3366; font-size: 12.5px; font-weight: 600; color: #ff3366; animation: slideIn 0.3s ease; }
+    @keyframes slideIn { from { transform: translateX(10px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
-    .debug-action-btn {
-      font-size: 11px;
-      color: rgba(255, 255, 255, 0.6);
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 6px;
-      padding: 2px 8px;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .debug-action-btn:hover {
-      color: #fff;
-      background: rgba(255, 255, 255, 0.12);
-    }
-
-    .debug-body {
-      flex: 1;
-      padding: 16px;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      background: #06020c;
-    }
-
-    .debug-input-block {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      flex-shrink: 0;
-    }
-
-    .debug-label {
-      font-size: 10px;
-      color: rgba(0, 240, 255, 0.6);
-      text-transform: uppercase;
-      font-weight: 700;
-    }
-
-    .debug-val {
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      padding: 8px 12px;
-      border-radius: 8px;
-      color: #e7f3ff;
-      outline: none;
-      font-size: 12px;
-      width: 100%;
-    }
-
-    .debug-thinking-stream {
-      flex: 1;
-      border: 1px solid rgba(255, 255, 255, 0.06);
-      background: rgba(0, 0, 0, 0.45);
-      padding: 12px;
-      border-radius: 8px;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .debug-log {
-      font-family: 'Courier New', Courier, monospace;
-      font-size: 11px;
-      line-height: 1.4;
-      padding-bottom: 6px;
-      border-bottom: 1px dashed rgba(255, 255, 255, 0.04);
-      word-break: break-word;
-    }
-
-    .debug-log pre {
-      white-space: pre-wrap;
-      word-break: break-all;
-      color: #7c4dff;
-      margin-top: 4px;
-      padding: 6px;
-      background: rgba(255, 255, 255, 0.02);
-      border-radius: 4px;
-    }
-
-    .log-listening {
-      color: #00bcd4;
-      font-weight: bold;
-    }
-
-    .log-transcribed {
-      color: #ffd54f;
-      font-weight: bold;
-    }
-
-    .log-thinking {
-      color: #9c27b0;
-      animation: pulseThinking 1s infinite alternate;
-    }
-
-    .log-response {
-      color: #4caf50;
-      font-weight: bold;
-    }
-
-    .log-trace {
-      color: #00f0ff;
-    }
-
-    .log-speaking {
-      color: #ff4081;
-    }
-
-    .log-error {
-      color: #ff3366;
-      font-weight: bold;
-    }
-
-    .log-idle {
-      color: rgba(255, 255, 255, 0.35);
-    }
-
-    @keyframes pulseThinking {
-      0% {
-        opacity: 0.6;
-      }
-
-      100% {
-        opacity: 1;
-      }
-    }
-
-    /* responsive overrides */
-    @media (max-width:720px) {
-      #city {
-        width: 46%;
-        max-width: none;
-      }
-
-      .header-row {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 12px
-      }
-
-      .controls {
-        width: 100%;
-        flex-wrap: wrap;
-      }
-
-      .debug-panel {
-        width: calc(100vw - 32px);
-        right: 16px;
-        bottom: 16px;
-        max-height: 300px;
-      }
-
-      .speech-balloon {
-        right: 16px;
-        bottom: 90px;
-        max-width: calc(100vw - 32px);
-      }
+    /* Responsive */
+    @media (max-width: 1024px) {
+      .bento-container { height: auto; overflow: auto; }
+      .bento-middle-grid { grid-template-columns: 1fr; }
+      .bento-bottom-grid { grid-template-columns: 1fr; }
+      .hero-content { flex-direction: column; text-align: center; gap: 16px; }
+      .hero-metrics { justify-content: center; }
+      .map-container, .chart-box { min-height: 260px; }
+      .bento-top-bar { flex-direction: column; align-items: flex-start; }
+      #city { width: 100%; }
     }
   </style>
 </head>
 
 <body>
-
-  <!-- decorative background -->
+  <!-- Decorative Background & Physics Engine -->
   <div class="parallax"></div>
   <canvas id="effects"></canvas>
 
-  <div class="container">
-    <div class="header-row">
-      <div>
+  <div class="bento-container">
+    
+    <!-- Top Bar -->
+    <div class="bento-card bento-top-bar">
+      <div class="title-group">
         <div class="title">Weather Trend Visualizer</div>
         <div class="subtitle">Enter a city to explore its hourly trend</div>
       </div>
-
       <div class="controls">
         <input id="city" placeholder="Enter city (e.g., New York)">
         <button id="showBtn" class="btn">Show Trend</button>
-        <button id="historyBtn" class="btn">History</button>
         <button id="darkToggle" class="btn">Mode: Colorful</button>
-
-        <!-- microphone button for speech interface -->
         <button id="micBtn" class="btn-mic" title="Click to talk to AI">🎙️</button>
-        <div id="listeningPulse" class="listening-pulse" title="Microphone is recording..."></div>
-
-        <div id="loader" class="loader" aria-hidden="true"></div>
+        <div id="listeningPulse" class="listening-pulse"></div>
       </div>
     </div>
 
-    <!-- HEALTH RISK & EMERGENCY ALERTS BANNER -->
-    <div id="healthAdvisory" class="health-advisory-container"></div>
-
-    <div class="metrics">
-      <img id="weatherIcon3D" src="" alt="weather icon" style="display:none">
-      <div class="chart-box" style="flex:1 1 100%">
-        <canvas id="chart"></canvas>
-      </div>
-    </div>
-  </div>
-
-  <!-- HISTORY OVERLAY -->
-  <div id="historyOverlay" class="history-overlay" role="dialog" aria-modal="true">
-    <div id="historyPanel" class="history-panel">
-      <div style="display:flex;align-items:center;justify-content:space-between">
-        <div style="display:flex;flex-direction:column">
-          <strong style="font-size:16px">Search History</strong>
-          <small style="color:var(--muted)">Floating glass card</small>
-        </div>
-        <div style="display:flex;gap:10px;align-items:center">
-          <button id="clearHistory" class="btn"
-            style="background:linear-gradient(135deg,#ff6b6b,#ff4081)">Clear</button>
-          <button id="closeHistory" class="btn"
-            style="background:linear-gradient(135deg,#7c4dff,#651fff)">Close</button>
+    <!-- Middle Grid -->
+    <div class="bento-middle-grid">
+      <!-- Current Weather Hero -->
+      <div class="bento-card hero-card">
+        <div class="card-header">🌡️ Current Conditions</div>
+        <div class="hero-content">
+          <img id="weatherIcon3D" class="hero-icon" src="https://static.vecteezy.com/system/resources/previews/021/692/821/original/cute-3d-cartoon-weather-icons-set-sun-moon-cloud-rain-rain-drop-vector.jpg" alt="weather icon">
+          <div class="hero-details">
+            <h1 id="heroTemp">--°C</h1>
+            <h2 id="heroCond">--</h2>
+            <div class="hero-metrics">
+              <div class="metric-pill" id="heroHum">💧 Humidity: --%</div>
+              <div class="metric-pill" id="heroWind">💨 Wind: -- m/s</div>
+              <div class="metric-pill" id="heroUv">☀️ UV: --</div>
+              <div class="metric-pill" id="heroVis">🌫️ Visibility: -- km</div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div id="historyGrid" class="history-grid" aria-live="polite" style="margin-top:14px"></div>
-
-      <div class="history-footer">
-        <div>Stored in your browser</div>
-        <div style="display:flex;gap:8px">
-          <button id="exportHistory" class="btn"
-            style="background:linear-gradient(135deg,#00bcd4,#0097a7);color:#012">Export</button>
+      <!-- Air Quality Panel -->
+      <div class="bento-card aqi-card">
+        <div class="card-header">🍃 Air Quality Index</div>
+        <div class="aqi-content" id="aqiContent">
+          <div class="aqi-ring" id="aqiRing"><span class="aqi-score" id="aqiScore">--</span></div>
+          <div class="aqi-status" id="aqiStatus">--</div>
         </div>
       </div>
     </div>
-  </div>
 
-  <!-- EMERGENCY DISASTER ALARM POPUP MODAL -->
-  <div id="emergencyOverlay" class="emergency-overlay" role="dialog" aria-modal="true">
-    <div id="emergencyModal" class="emergency-modal">
-      <div class="emergency-badge">⚠️</div>
-      <div id="emergencyTitle" class="emergency-title">Severe Weather Warning</div>
-      <div id="emergencyDesc" class="emergency-desc">A high-priority storm or emergency was detected in your location.
-        Please take precaution!</div>
-      <button id="dismissEmergency" class="emergency-btn">Acknowledge & Dismiss</button>
-    </div>
-  </div>
+    <!-- Bottom Grid -->
+    <div class="bento-bottom-grid">
+      <!-- Map Container -->
+      <div class="bento-card map-card">
+        <div class="card-header map-header">
+           <span>🗺️ Radar Map</span>
+           <input type="text" id="mapSearch" class="map-search-input" placeholder="Search coordinates/city...">
+        </div>
+        <div id="map" class="map-container"></div>
+      </div>
 
-  <!-- AI ASSISTANT SPEECH BALLOON HUD -->
-  <div id="aiSpeechBalloon" class="speech-balloon" title="Click to hide balloon"></div>
+      <!-- Forecast Chart -->
+      <div class="bento-card chart-card">
+        <div class="card-header">📈 Trend Analytics</div>
+        <div class="chart-box">
+          <canvas id="chart"></canvas>
+        </div>
+      </div>
 
-  <!-- COLLAPSIBLE NEON DEBUG & LOGGING panel (AI THOUGHT STREAM) -->
-  <div id="debugPanel" class="debug-panel collapsed">
-    <div id="debugPanelHeader" class="debug-header">
-      <div class="debug-title-row">
-        <span>AI Thought Stream</span>
-        <span class="debug-badge">Debug Active</span>
-      </div>
-      <div class="debug-controls">
-        <button id="clearDebugLogs" class="debug-action-btn" title="Clear console output">Clear Logs</button>
-        <button class="debug-close-btn" aria-label="Toggle debug stream">↕</button>
-      </div>
-    </div>
-    <div class="debug-body">
-      <div class="debug-input-block">
-        <div class="debug-label">Speech Transcription</div>
-        <input id="debugSpeechIn" class="debug-val" type="text" readonly placeholder="Waiting for voice input..." />
-      </div>
-      <div class="debug-label">System Trace Log</div>
-      <div id="debugThinkingStream" class="debug-thinking-stream">
-        <div class="debug-log log-idle">Console ready. Awaiting microphone trigger...</div>
+      <!-- AI Recommendations & Alerts -->
+      <div class="bento-card ai-alert-card">
+        <div class="card-header">🤖 AI Recommendations & Alerts</div>
+        <div id="alertContainer"></div>
+        <div id="aiRecommendations" class="ai-recommendations-box">
+          <div class="ai-empty-state">✅ Weather context loaded.<br>Click the microphone and ask a question!</div>
+        </div>
       </div>
     </div>
   </div>
@@ -1068,10 +319,8 @@
   <audio id="rainSound" src="https://www.soundjay.com/nature/rain-01.mp3" loop></audio>
   <audio id="thunderSound" src="https://www.soundjay.com/nature/thunder-01.mp3"></audio>
 
-  <!-- Load voice assistant service and core app script -->
   <script src="voiceService.js"></script>
   <script src="app.js"></script>
 
 </body>
-
 </html>
