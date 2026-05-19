@@ -2,8 +2,8 @@ const mongoose = require('mongoose');
 
 const weatherSchema = new mongoose.Schema({
     city: String,
-    temperature: Number,
-    description: String,
+    temperatures: [Number],
+    times: [String],
     createdAt: { type: Date, default: Date.now }
 });
 
