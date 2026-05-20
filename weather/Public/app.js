@@ -112,6 +112,7 @@ function updateMapCard(data) {
             }).addTo(map);
             dangerCircle.bindPopup(`<strong>🚨 DANGER ZONE</strong><br><span style="color:#cc0000;font-weight:600;font-size:12px;">${zone.alert}</span>`);
         });
+        map.on('click', onMapClick);
     } else {
         map.setView(latlng, 10);
     }
@@ -163,6 +164,51 @@ function updateChartCard(data) {
             }
         }
     });
+}
+
+function renderDepartureAdvice(data) {
+    const container = document.getElementById('smartDepartureContainer');
+    if (!container) return;
+    
+    if (!data || !data.times) {
+        container.innerHTML = '';
+        return;
+    }
+    
+    // Use existing 24-hour hourly trend data to identify worst weather in next 3 hours
+    // If specific weather arrays (precip, visibility) are missing from the API payload, we fallback to temperature drops
+    const nextHours = 3;
+    let isDeteriorating = false;
+    let worstTimeIndex = 1;
+    
+    for (let i = 1; i <= Math.min(nextHours, data.times.length - 1); i++) {
+        const tempDrop = data.temps && (data.temps[0] - data.temps[i] > 2);
+        const rainIncrease = data.precip && (data.precip[i] > data.precip[0]);
+        const visDrop = data.visibilities && (data.visibilities[i] < data.visibilities[0]);
+        
+        if (tempDrop || rainIncrease || visDrop) {
+            isDeteriorating = true;
+            worstTimeIndex = i;
+        }
+    }
+    
+    const worstTime = data.times[worstTimeIndex] || 'soon';
+    
+    let message, icon;
+    if (isDeteriorating) {
+        message = `Heads up: Conditions expected to worsen by ${worstTime}. Consider leaving before then.`;
+        icon = '🚦';
+    } else {
+        message = 'Great time to head out! Conditions are clearing.';
+        icon = '🕰️';
+    }
+    
+    container.innerHTML = `
+        <div class="smart-departure-card">
+            <div class="smart-departure-icon">${icon}</div>
+            <div>${message}</div>
+        </div>
+    `;
 }
 
 function updateAlertsCard(data) {
@@ -309,6 +355,242 @@ animate();
 
 
 /* =========================================================
+   MAP ROUTING ENGINE (WITH FLOOD AVOIDANCE)
+========================================================= */
+let currentRouteControl = null;
+let originLatLng = null;
+let destinationLatLng = null;
+let originMarker = null;
+let destinationMarker = null;
+
+function showRoutingAlert(message) {
+    const alertEl = document.getElementById('routingAlert');
+    if (alertEl) {
+        alertEl.textContent = message;
+        alertEl.style.display = 'block';
+        setTimeout(() => {
+            alertEl.style.display = 'none';
+        }, 6000);
+    }
+}
+
+function dist2(v, w) {
+    const vLng = (v.lng !== undefined) ? v.lng : v.lon;
+    const wLng = (w.lng !== undefined) ? w.lng : w.lon;
+    return Math.pow(v.lat - w.lat, 2) + Math.pow(vLng - wLng, 2);
+}
+
+function distToSegment(p, v, w) {
+    const l2 = dist2(v, w);
+    if (l2 === 0) return Math.sqrt(dist2(p, v));
+    const pLng = (p.lng !== undefined) ? p.lng : p.lon;
+    const vLng = (v.lng !== undefined) ? v.lng : v.lon;
+    const wLng = (w.lng !== undefined) ? w.lng : w.lon;
+    let t = ((pLng - vLng) * (wLng - vLng) + (p.lat - v.lat) * (w.lat - v.lat)) / l2;
+    t = Math.max(0, Math.min(1, t));
+    return Math.sqrt(dist2(p, { lat: v.lat + t * (w.lat - v.lat), lng: v.lng + t * (w.lng - v.lng) }));
+}
+
+function checkAndAvoidFloods(waypoints) {
+    const floodZones = indiaDangerZones.filter(z => 
+        z.alert.toLowerCase().includes('flooding') || 
+        z.alert.toLowerCase().includes('cyclone') ||
+        z.alert.toLowerCase().includes('thunderstorm')
+    );
+    
+    let activeAlert = null;
+    let nearZone = null;
+    
+    for (let zone of floodZones) {
+        for (let i = 0; i < waypoints.length - 1; i++) {
+            const p1 = waypoints[i];
+            const p2 = waypoints[i+1];
+            const dist = distToSegment(zone, p1, p2);
+            if (dist < 0.25) { // ~25km
+                nearZone = zone;
+                activeAlert = zone.alert;
+                break;
+            }
+        }
+        if (nearZone) break;
+    }
+    
+    if (nearZone) {
+        const start = waypoints[0];
+        const end = waypoints[waypoints.length - 1];
+        const startLng = (start.lng !== undefined) ? start.lng : start.lon;
+        const endLng = (end.lng !== undefined) ? end.lng : end.lon;
+        const dx = endLng - startLng;
+        const dy = end.lat - start.lat;
+        const len = Math.sqrt(dx*dx + dy*dy);
+        
+        if (len > 0) {
+            const px = -dy / len;
+            const py = dx / len;
+            // Detour point: offset the flood zone position by ~35km (0.32 degrees)
+            const detour1 = L.latLng(nearZone.lat + py * 0.35, nearZone.lon + px * 0.35);
+            return { safe: false, detour: detour1, alert: activeAlert };
+        }
+    }
+    return { safe: true };
+}
+
+function drawSmartRoute(startLat, startLon, destLat, destLon, detourLatLng = null) {
+    if (currentRouteControl) { map.removeControl(currentRouteControl); }
+    
+    const waypoints = [L.latLng(startLat, startLon)];
+    if (detourLatLng) {
+        waypoints.push(detourLatLng);
+    }
+    waypoints.push(L.latLng(destLat, destLon));
+    
+    currentRouteControl = L.Routing.control({
+        waypoints: waypoints,
+        lineOptions: { styles: [{color: detourLatLng ? '#4caf50' : '#00bcd4', opacity: 0.8, weight: 6}] },
+        createMarker: function() { return null; },
+        show: false,
+        addWaypoints: false,
+        routeWhileDragging: false,
+        fitSelectedRoutes: true
+    }).addTo(map);
+    
+    if (!detourLatLng) {
+        currentRouteControl.on('routesfound', function(e) {
+            const routes = e.routes;
+            if (routes && routes.length > 0) {
+                const route = routes[0];
+                const safety = checkAndAvoidFloods(route.coordinates);
+                if (!safety.safe && safety.detour) {
+                    showRoutingAlert(`🚨 Flood Alert: ${safety.alert}. detoured!`);
+                    drawSmartRoute(startLat, startLon, destLat, destLon, safety.detour);
+                } else {
+                    showRoutingAlert(`Safe route calculated.`);
+                }
+            }
+        });
+    }
+}
+
+async function geocodeCity(query) {
+    try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
+        const results = await res.json();
+        if (results && results.length > 0) {
+            return { lat: parseFloat(results[0].lat), lon: parseFloat(results[0].lon) };
+        }
+    } catch (err) {
+        console.warn("Geocoding failed", err);
+    }
+    return null;
+}
+
+async function calculateAndDrawRoute() {
+    const startVal = document.getElementById('routeStart').value.trim();
+    const endVal = document.getElementById('routeEnd').value.trim();
+    
+    if (!startVal || !endVal) {
+        showRoutingAlert("Please specify both start and destination.");
+        return;
+    }
+    
+    let startLoc = null;
+    let endLoc = null;
+    
+    if (startVal.includes(',')) {
+        const parts = startVal.split(',');
+        startLoc = { lat: parseFloat(parts[0]), lon: parseFloat(parts[1]) };
+    } else {
+        startLoc = await geocodeCity(startVal);
+    }
+    
+    if (endVal.includes(',')) {
+        const parts = endVal.split(',');
+        endLoc = { lat: parseFloat(parts[0]), lon: parseFloat(parts[1]) };
+    } else {
+        endLoc = await geocodeCity(endVal);
+    }
+    
+    if (startLoc && endLoc) {
+        originLatLng = L.latLng(startLoc.lat, startLoc.lon);
+        destinationLatLng = L.latLng(endLoc.lat, endLoc.lon);
+        
+        if (originMarker) map.removeLayer(originMarker);
+        originMarker = L.marker(originLatLng, {
+            icon: L.divIcon({
+                className: 'custom-div-icon',
+                html: "<div style='background-color:#4caf50; width:12px; height:12px; border-radius:50%; border:2px solid white;'></div>",
+                iconSize: [12, 12]
+            })
+        }).addTo(map);
+        
+        if (destinationMarker) map.removeLayer(destinationMarker);
+        destinationMarker = L.marker(destinationLatLng, {
+            icon: L.divIcon({
+                className: 'custom-div-icon',
+                html: "<div style='background-color:#f44336; width:12px; height:12px; border-radius:50%; border:2px solid white;'></div>",
+                iconSize: [12, 12]
+            })
+        }).addTo(map);
+        
+        drawSmartRoute(startLoc.lat, startLoc.lon, endLoc.lat, endLoc.lon);
+    } else {
+        showRoutingAlert("Failed to find coordinates for locations.");
+    }
+}
+
+function clearRouting() {
+    originLatLng = null;
+    destinationLatLng = null;
+    if (originMarker) { map.removeLayer(originMarker); originMarker = null; }
+    if (destinationMarker) { map.removeLayer(destinationMarker); destinationMarker = null; }
+    if (currentRouteControl) { map.removeControl(currentRouteControl); currentRouteControl = null; }
+    document.getElementById('routeStart').value = '';
+    document.getElementById('routeEnd').value = '';
+}
+
+function onMapClick(e) {
+    if (!originLatLng) {
+        originLatLng = e.latlng;
+        if (originMarker) map.removeLayer(originMarker);
+        originMarker = L.marker(originLatLng, {
+            icon: L.divIcon({
+                className: 'custom-div-icon',
+                html: "<div style='background-color:#4caf50; width:12px; height:12px; border-radius:50%; border:2px solid white;'></div>",
+                iconSize: [12, 12]
+            })
+        }).addTo(map).bindPopup("Origin").openPopup();
+        document.getElementById('routeStart').value = `${originLatLng.lat.toFixed(4)}, ${originLatLng.lng.toFixed(4)}`;
+    } else if (!destinationLatLng) {
+        destinationLatLng = e.latlng;
+        if (destinationMarker) map.removeLayer(destinationMarker);
+        destinationMarker = L.marker(destinationLatLng, {
+            icon: L.divIcon({
+                className: 'custom-div-icon',
+                html: "<div style='background-color:#f44336; width:12px; height:12px; border-radius:50%; border:2px solid white;'></div>",
+                iconSize: [12, 12]
+            })
+        }).addTo(map).bindPopup("Destination").openPopup();
+        document.getElementById('routeEnd').value = `${destinationLatLng.lat.toFixed(4)}, ${destinationLatLng.lng.toFixed(4)}`;
+        calculateAndDrawRoute();
+    } else {
+        clearRouting();
+        originLatLng = e.latlng;
+        originMarker = L.marker(originLatLng, {
+            icon: L.divIcon({
+                className: 'custom-div-icon',
+                html: "<div style='background-color:#4caf50; width:12px; height:12px; border-radius:50%; border:2px solid white;'></div>",
+                iconSize: [12, 12]
+            })
+        }).addTo(map).bindPopup("Origin").openPopup();
+        document.getElementById('routeStart').value = `${originLatLng.lat.toFixed(4)}, ${originLatLng.lng.toFixed(4)}`;
+    }
+}
+
+window.calculateAndDrawRoute = calculateAndDrawRoute;
+window.clearRouting = clearRouting;
+
+
+/* =========================================================
    ORCHESTRATOR & BINDS
 ========================================================= */
 
@@ -321,6 +603,7 @@ async function loadCityTrend(cityName) {
     updateAQICard(data);
     updateMapCard(data);
     updateChartCard(data);
+    renderDepartureAdvice(data);
     updateAlertsCard(data);
     
     applyWeatherEffects(data.currentCondition);
@@ -400,6 +683,30 @@ try {
     }
 } catch (e) { 
     console.error("Voice Service missing or failed to init:", e); 
+}
+
+/* =========================================================
+   MAP SEARCH & ROUTING INTERACTIVITY BINDINGS
+   ========================================================= */
+const routeBtn = document.getElementById('routeBtn');
+if (routeBtn) {
+    routeBtn.addEventListener('click', calculateAndDrawRoute);
+}
+const clearRouteBtn = document.getElementById('clearRouteBtn');
+if (clearRouteBtn) {
+    clearRouteBtn.addEventListener('click', clearRouting);
+}
+const routeStartInput = document.getElementById('routeStart');
+if (routeStartInput) {
+    routeStartInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') calculateAndDrawRoute();
+    });
+}
+const routeEndInput = document.getElementById('routeEnd');
+if (routeEndInput) {
+    routeEndInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') calculateAndDrawRoute();
+    });
 }
 
 /* =========================================================

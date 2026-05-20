@@ -61,6 +61,26 @@ class WeatherVoiceAssistant {
             this.onTranscription(transcript);
             this.onAIThinking(`🗣️ User asks: "${transcript}"`, "transcribed");
             
+            // Intercept voice route requests: "route from X to Y", "navigate from X to Y", etc.
+            const routeMatch = transcript.match(/(?:route|navigate|go|directions?)\s+(?:from\s+)?([a-zA-Z\s]+)\s+to\s+([a-zA-Z\s]+)/i);
+            if (routeMatch && routeMatch[1] && routeMatch[2]) {
+                const origin = routeMatch[1].trim();
+                const destination = routeMatch[2].trim();
+                
+                this.onAIThinking(`🗺️ Routing action: Calculating route from "${origin}" to "${destination}"...`, "thinking");
+                
+                const startInput = document.getElementById('routeStart');
+                const endInput = document.getElementById('routeEnd');
+                if (startInput && endInput) {
+                    startInput.value = origin;
+                    endInput.value = destination;
+                    if (window.calculateAndDrawRoute) {
+                        window.calculateAndDrawRoute();
+                    }
+                }
+                return; // STOP execution, bypass AI Assistant response
+            }
+            
             // Extract city name from the spoken question
             const detectedCity = this.extractCity(transcript);
             
